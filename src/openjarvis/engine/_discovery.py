@@ -132,7 +132,11 @@ def discover_engines(config: JarvisConfig) -> List[Tuple[str, InferenceEngine]]:
     # threads collapses that to roughly the slowest single probe. The
     # healthy.sort() below normalizes order, so completion order is
     # irrelevant and the result is identical to the serial version (#263).
-    keys = list(EngineRegistry.keys())
+    keys = (
+        ["sixtydb"]
+        if config.engine.default == "sixtydb"
+        else list(EngineRegistry.keys())
+    )
 
     def _probe(key: str) -> Tuple[str, InferenceEngine] | None:
         try:
@@ -216,6 +220,8 @@ def get_engine(
         return None
 
     default_key = config.engine.default
+    if default_key == "sixtydb":
+        return get_engine(config, "sixtydb", model=model)
     default_is_cloud: bool | None = None
     if default_key and EngineRegistry.contains(default_key):
         default_cls = EngineRegistry.get(default_key)

@@ -28,16 +28,7 @@ from openjarvis.core.config import (
 )
 
 # Engines supported by ``jarvis init --engine``.
-_SUPPORTED_ENGINES = [
-    "ollama",
-    "vllm",
-    "sglang",
-    "llamacpp",
-    "mlx",
-    "lmstudio",
-    "exo",
-    "nexa",
-]
+_SUPPORTED_ENGINES = ["sixtydb"]
 
 
 def _detect_running_engines() -> list[str]:
@@ -67,6 +58,8 @@ def _detect_running_engines() -> list[str]:
 
 def _next_steps_text(engine: str, model: str = "") -> str:
     """Return engine-specific next-steps guidance after init."""
+    if engine == "sixtydb":
+        return "Run jarvis gui, enter your 60db API key, and choose your voice."
     pull_model = model or "qwen3.5:2b"
     steps: dict[str, str] = {
         "ollama": (
@@ -377,60 +370,7 @@ def init(
     else:
         console.print("  GPU      : none detected")
 
-    # Resolve engine: explicit flag > interactive selection > auto-detect
-    if engine is None and config is None:
-        recommended = recommend_engine(hw)
-        # Bare-jarvis cold path: use the recommended engine non-interactively.
-        if from_bare_jarvis:
-            engine = recommended
-        else:
-            console.print()
-            console.print("[bold]Detecting running inference engines...[/bold]")
-            running = _detect_running_engines()
-            if running:
-                console.print(f"  Found running: [green]{', '.join(running)}[/green]")
-            else:
-                console.print("  No running engines detected.")
-
-            # Build choices: show running engines first, then recommended, then rest
-            seen: set[str] = set()
-            choices: list[str] = []
-            for r in running:
-                if r not in seen:
-                    choices.append(r)
-                    seen.add(r)
-            if recommended not in seen:
-                choices.append(recommended)
-                seen.add(recommended)
-            for e in _SUPPORTED_ENGINES:
-                if e not in seen:
-                    choices.append(e)
-                    seen.add(e)
-
-            # Default: first running engine, or hardware recommendation
-            default = running[0] if running else recommended
-
-            labels = []
-            for c in choices:
-                parts = [c]
-                if c in running:
-                    parts.append("running")
-                if c == recommended:
-                    parts.append("recommended")
-                labels.append(
-                    f"  {c}" + (f"  ({', '.join(parts[1:])})" if len(parts) > 1 else "")
-                )
-
-            console.print()
-            console.print("[bold]Available engines:[/bold]")
-            for label in labels:
-                console.print(label)
-
-            engine = click.prompt(
-                "\nSelect inference engine",
-                type=click.Choice(choices, case_sensitive=False),
-                default=default,
-            )
+    engine = engine or "sixtydb"
 
     # Probe remote host if specified
     if host:
@@ -482,8 +422,8 @@ schedule = "0 7 * * *"
 timezone = "America/Los_Angeles"
 persona = "jarvis"
 honorific = "sir"
-tts_backend = "cartesia"
-voice_id = "c8f7835e-28a3-4f0c-80d7-c1302ac62aae"
+tts_backend = "sixtydb"
+voice_id = ""
 voice_speed = 1.2
 sections = ["health", "messages", "calendar", "world"]
 
@@ -533,7 +473,9 @@ sources = ["hackernews", "news_rss"]
     selected_engine = engine or recommend_engine(hw)
     model = recommend_model(hw, selected_engine)
 
-    if not model:
+    if selected_engine == "sixtydb":
+        console.print("\n  60db chat is ready after key and voice setup in jarvis gui.")
+    elif not model:
         console.print(
             "\n  [yellow]! Not enough memory to run any local model.[/yellow]\n"
             "  Consider a cloud engine or a machine with more RAM."

@@ -68,7 +68,7 @@ class FeedbackScoreRequest(BaseModel):
 class OptimizeRunRequest(BaseModel):
     benchmark: str
     max_trials: int = 20
-    optimizer_model: str = "claude-sonnet-4-6"
+    optimizer_model: str = "60db-tiny"
     max_samples: int = 50
 
 
@@ -1065,16 +1065,13 @@ _MAX_TTS_CHARS = 5000
 async def _resolve_tts_backend(request: Request):
     """Return a healthy TTS backend, resolved once and cached on app state.
 
-    Backends load models on construction, so this stays lazy: a server whose
-    users never ask for audio never pays for it.
+    Resolve lazily so speech is optional for text-only sessions.
     """
     app = request.app
     if getattr(app.state, "tts_resolved", False):
         return getattr(app.state, "tts_backend", None)
 
-    # The first health probe can load Kokoro's model. A shared task keeps that
-    # work off the event loop and coalesces concurrent probes, including when
-    # the backend is unavailable. A later request may retry that failure.
+    # Coalesce concurrent probes; a later request may retry a failed discovery.
     task = getattr(app.state, "tts_resolution_task", None)
     if task is None:
 
@@ -1166,7 +1163,9 @@ async def synthesize_speech(request: Request, body: SpeechSynthesizeRequest):
 
     return Response(
         content=result.audio,
-        media_type="audio/wav",
+        media_type={"wav": "audio/wav", "mp3": "audio/mpeg", "ogg": "audio/ogg"}.get(
+            result.format, "application/octet-stream"
+        ),
         headers={
             "X-Voice-Id": result.voice_id or voice_id,
             "X-Sample-Rate": str(result.sample_rate),

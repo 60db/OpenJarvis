@@ -14,6 +14,8 @@ import { XRayFooter } from './XRayFooter';
 import { SpeakMessageButton } from './SpeakMessageButton';
 import type { ChatMessage } from '../../types';
 import { stripThinkTags } from '../../lib/message-text';
+import { judgeWithSixtyDB } from '../../lib/api';
+import { useAppStore } from '../../lib/store';
 
 interface Props {
   message: ChatMessage;
@@ -94,6 +96,38 @@ function CopyMessageButton({ content }: { content: string }) {
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
   );
+}
+
+function JudgeMessageButton({ messageId, content }: { messageId: string; content: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState('');
+  const [error, setError] = useState('');
+  const check = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const messages = useAppStore.getState().messages;
+      const index = messages.findIndex((m) => m.id === messageId);
+      const query = messages.slice(0, index).reverse().find((m) => m.role === 'user')?.content;
+      if (!query) throw new Error('The original question is unavailable.');
+      const run = await judgeWithSixtyDB({ query, answer: content }, {
+        quality: { type: 'score', instructions: 'How correctly and helpfully does this answer address the query?',
+          criteria: ['Unhelpful or incorrect', 'Partly useful', 'Mostly correct', 'Correct and helpful'] },
+      });
+      const answer = run.answers.quality;
+      if (typeof answer.score !== 'number') throw new Error('Judge returned an invalid score.');
+      const confidence = typeof answer.confidence === 'number' ? ` · ${Math.round(answer.confidence * 100)}% confidence` : '';
+      setResult(`Judge: ${(answer.score / 3 * 100).toFixed(0)}/100${confidence}`);
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusy(false); }
+  };
+  return <>
+    <button type="button" onClick={() => void check()} disabled={busy}
+      className="px-2 py-1 text-xs rounded disabled:opacity-50" style={{ color: 'var(--color-text-tertiary)' }}
+      title="Evaluate this answer using 60db Judge">{busy ? 'Judging…' : 'Judge answer'}</button>
+    {result && <span role="status" className="text-xs">{result}</span>}
+    {error && <span role="alert" className="text-xs" style={{ color: 'var(--color-error)' }}>{error}</span>}
+  </>;
 }
 
 export function MessageBubble({ message, isLive = false }: Props) {
@@ -178,7 +212,10 @@ export function MessageBubble({ message, isLive = false }: Props) {
       <div className="flex items-center gap-2 mt-1.5">
         <CopyMessageButton content={cleanContent} />
         {!isUser && !isLive && (
-          <SpeakMessageButton messageId={message.id} content={cleanContent} />
+          <>
+            <SpeakMessageButton messageId={message.id} content={cleanContent} />
+            {cleanContent && <JudgeMessageButton messageId={message.id} content={cleanContent} />}
+          </>
         )}
       </div>
       <XRayFooter

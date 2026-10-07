@@ -3,17 +3,12 @@ import {
   Zap,
   Activity,
   Thermometer,
-  DollarSign,
-  TrendingDown,
-  Cloud,
-  HardDrive,
   Hash,
   X,
-  Trophy,
-  ExternalLink,
 } from 'lucide-react';
 import { useAppStore } from '../../lib/store';
 import { getBase } from '../../lib/api';
+import { CostComparison } from '../Dashboard/CostComparison';
 
 interface EnergyData {
   total_energy_j?: number;
@@ -28,17 +23,9 @@ interface TelemetryStats {
   total_tokens?: number;
 }
 
-const CLOUD_PRICING = [
-  { name: 'GPT-5.6 Sol', input: 5.00, output: 30.00, primary: true },
-  { name: 'Claude Fable 5', input: 10.00, output: 50.00, primary: false },
-  { name: 'Gemini 3.1 Pro', input: 2.00, output: 12.00, primary: false },
-];
-
 export function SystemPanel() {
   const savings = useAppStore((s) => s.savings);
   const toggleSystemPanel = useAppStore((s) => s.toggleSystemPanel);
-  const optInEnabled = useAppStore((s) => s.optInEnabled);
-  const setOptInModalOpen = useAppStore((s) => s.setOptInModalOpen);
   const liveEnergy = useAppStore((s) => s.liveEnergy);
   const [energy, setEnergy] = useState<EnergyData | null>(null);
   const [telemetry, setTelemetry] = useState<TelemetryStats | null>(null);
@@ -71,9 +58,6 @@ export function SystemPanel() {
   useEffect(() => {
     if (savings) fetchData();
   }, [savings, fetchData]);
-
-  const promptK = (savings?.total_prompt_tokens ?? 0) / 1000;
-  const completionK = (savings?.total_completion_tokens ?? 0) / 1000;
 
   return (
     <div
@@ -145,130 +129,7 @@ export function SystemPanel() {
         </section>
 
 
-        {/* Cost Comparison */}
-        <section>
-          <h4 className="text-[11px] font-medium uppercase tracking-wide mb-2" style={{ color: 'var(--color-text-tertiary)' }}>
-            Cost Comparison
-          </h4>
-
-          {/* Local */}
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2 mb-2"
-            style={{ background: 'var(--color-accent-subtle)', border: '1px solid var(--color-accent)' }}
-          >
-            <HardDrive size={14} style={{ color: 'var(--color-accent)' }} />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>Local</div>
-            </div>
-            <div className="text-sm font-semibold" style={{ color: 'var(--color-success)' }}>
-              ${(savings?.local_cost ?? 0).toFixed(4)}
-            </div>
-          </div>
-
-          {/* Cloud providers */}
-          <div className="flex flex-col gap-1.5">
-            {CLOUD_PRICING.map((provider) => {
-              const cost = (promptK * provider.input) / 1000 + (completionK * provider.output) / 1000;
-              const saved = cost - (savings?.local_cost ?? 0);
-              return (
-                <div
-                  key={provider.name}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2"
-                  style={{
-                    background: provider.primary ? 'var(--color-bg-secondary)' : 'var(--color-bg-secondary)',
-                    border: provider.primary ? '1px solid var(--color-border-accent, var(--color-accent))' : '1px solid transparent',
-                  }}
-                >
-                  <Cloud size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="text-xs truncate"
-                      style={{
-                        color: provider.primary ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                        fontWeight: provider.primary ? 500 : 400,
-                      }}
-                    >
-                      {provider.name}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-mono" style={{ color: 'var(--color-text)' }}>
-                      ${cost.toFixed(4)}
-                    </div>
-                    {saved > 0.0001 && (
-                      <div className="text-[9px] flex items-center gap-0.5 justify-end" style={{ color: 'var(--color-success)' }}>
-                        <TrendingDown size={8} />
-                        ${saved.toFixed(4)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-
-        </section>
-
-        {/* Leaderboard / Share */}
-        <section>
-          <h4
-            className="text-[11px] font-medium uppercase tracking-wide mb-2"
-            style={{ color: 'var(--color-text-tertiary)' }}
-          >
-            Leaderboard
-          </h4>
-
-          <button
-            onClick={() => setOptInModalOpen(true)}
-            className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
-            style={{
-              background: optInEnabled
-                ? 'var(--color-accent-subtle)'
-                : 'var(--color-bg-secondary)',
-              border: optInEnabled
-                ? '1px solid var(--color-accent)'
-                : '1px solid var(--color-border)',
-            }}
-          >
-            <Trophy
-              size={14}
-              style={{
-                color: optInEnabled ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-              }}
-            />
-            <span
-              className="text-xs flex-1 text-left"
-              style={{
-                color: optInEnabled ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-              }}
-            >
-              {optInEnabled ? 'Sharing Savings' : 'Share Your Savings'}
-            </span>
-            <span
-              className="text-[9px] px-1.5 py-0.5 rounded-full"
-              style={{
-                background: optInEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary, var(--color-bg-secondary))',
-                color: optInEnabled ? 'white' : 'var(--color-text-tertiary)',
-              }}
-            >
-              {optInEnabled ? 'ON' : 'OFF'}
-            </span>
-          </button>
-
-          <a
-            href="https://open-jarvis.github.io/OpenJarvis/leaderboard"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 text-[11px] rounded-lg transition-colors"
-            style={{ color: 'var(--color-text-tertiary)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-accent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-tertiary)')}
-          >
-            <ExternalLink size={10} />
-            View Leaderboard
-          </a>
-        </section>
+        <CostComparison />
       </div>
     </div>
   );

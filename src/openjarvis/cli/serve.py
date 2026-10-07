@@ -194,7 +194,14 @@ def serve(
     selection_model = (
         model_name or config.server.model or config.intelligence.default_model or None
     )
-    resolved = get_engine(config, engine_key, model=selection_model)
+    if (engine_key or config.engine.default) == "sixtydb":
+        from openjarvis.engine.sixtydb import SixtyDBEngine
+
+        # Allow the UI to open before a key is entered; generation still requires it.
+        config.engine.default = "sixtydb"
+        resolved = ("sixtydb", SixtyDBEngine())
+    else:
+        resolved = get_engine(config, engine_key, model=selection_model)
     if resolved is None:
         console.print(
             "[red bold]No inference engine available.[/red bold]\n\n"
@@ -221,7 +228,7 @@ def serve(
         or os.environ.get("GOOGLE_API_KEY")
         or os.environ.get("OPENROUTER_API_KEY")
     )
-    if _has_cloud and engine_name != "cloud":
+    if _has_cloud and engine_name not in {"cloud", "sixtydb"}:
         try:
             from openjarvis.engine.cloud import CloudEngine
 

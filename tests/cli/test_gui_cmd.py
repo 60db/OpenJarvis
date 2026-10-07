@@ -24,6 +24,7 @@ def test_gui_custom_ports_use_project_root_and_same_origin_proxy(
 
     with (
         mock.patch.object(gui_cmd, "_frontend_dir", return_value=frontend),
+        mock.patch.object(gui_cmd, "_running_sixtydb_port", return_value=None),
         mock.patch.object(gui_cmd, "_check_frontend_port") as check_port,
         mock.patch.object(gui_cmd, "_ensure_frontend_dependencies") as ensure_deps,
         mock.patch.object(
@@ -52,9 +53,13 @@ def test_gui_custom_ports_use_project_root_and_same_origin_proxy(
             "/bin/uv",
             "run",
             "--extra",
-            "desktop",
+            "server",
             "jarvis",
             "start",
+            "--engine",
+            "sixtydb",
+            "--model",
+            "60db-tiny",
             "--port",
             "8123",
         ],
@@ -90,6 +95,7 @@ def test_gui_rejects_occupied_frontend_port_before_launch(tmp_path: Path) -> Non
         port = listener.getsockname()[1]
         with (
             mock.patch.object(gui_cmd, "_frontend_dir", return_value=frontend),
+            mock.patch.object(gui_cmd, "_running_sixtydb_port", return_value=None),
             mock.patch.object(gui_cmd.shutil, "which", return_value="/bin/npm"),
             mock.patch.object(gui_cmd, "_ensure_frontend_dependencies") as ensure_deps,
             mock.patch.object(gui_cmd.subprocess, "Popen") as popen,
@@ -113,3 +119,18 @@ def test_wait_for_port_stops_when_vite_exits() -> None:
     with mock.patch.object(gui_cmd.socket, "create_connection") as connect:
         assert not gui_cmd._wait_for_port(process, "127.0.0.1", 5173)
     connect.assert_not_called()
+
+
+def test_gui_reuses_owned_sixtydb_daemon():
+    from openjarvis.cli import daemon_cmd
+
+    with (
+        mock.patch.object(daemon_cmd, "_read_pid", return_value=123),
+        mock.patch.object(
+            daemon_cmd, "_bound_address", return_value=("127.0.0.1", 8123)
+        ),
+        mock.patch.object(gui_cmd.httpx, "get") as get,
+    ):
+        get.return_value.json.return_value = {"engine": "sixtydb"}
+        assert gui_cmd._running_sixtydb_port() == 8123
+        assert get.call_args.args[0] == "http://127.0.0.1:8123/v1/info"

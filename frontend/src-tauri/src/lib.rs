@@ -8,8 +8,7 @@ use tokio::sync::Mutex;
 
 const OLLAMA_PORT: u16 = 11434;
 const JARVIS_PORT: u16 = 8000;
-const DESKTOP_UV_SYNC_COMMAND: &str =
-    "uv sync --extra desktop --extra inference-cloud --extra inference-google --group desktop-native";
+const DESKTOP_UV_SYNC_COMMAND: &str = "uv sync --extra server --group desktop-native";
 
 /// Small, fast model used when startup needs a default Ollama tag.
 const STARTUP_MODEL: &str = "qwen3.5:4b";
@@ -486,7 +485,7 @@ impl Default for SetupStatus {
     fn default() -> Self {
         Self {
             phase: "awaiting_source".into(),
-            detail: "Choose where OpenJarvis should run models.".into(),
+            detail: "Connect your 60db API key and choose a voice.".into(),
             ollama_ready: false,
             server_ready: false,
             model_ready: false,
@@ -1484,11 +1483,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         .args([
             "sync",
             "--extra",
-            "desktop",
-            "--extra",
-            "inference-cloud",
-            "--extra",
-            "inference-google",
+            "server",
             // openjarvis_rust lives in a uv dependency group (not the published
             // `desktop` extra) so pip installs from PyPI don't require it (#584).
             "--group",
@@ -2108,6 +2103,7 @@ const SECURE_KEY_SERVICE: &str = "OpenJarvis Cloud Keys";
 // overwrite an existing <ENGINE>_API_KEY while setup can still be cancelled.
 const PENDING_INFERENCE_API_KEY: &str = "OPENJARVIS_PENDING_INFERENCE_API_KEY";
 const MANAGED_CLOUD_KEY_NAMES: &[&str] = &[
+    "SIXTYDB_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
@@ -2382,6 +2378,136 @@ async fn save_cloud_key(
     )
     .await;
 
+    Ok(())
+}
+
+/// Fetch voices before the Python backend starts. The key never enters web storage.
+#[tauri::command]
+async fn sixtydb_voices(api_key: Option<String>) -> Result<serde_json::Value, String> {
+    let key = match api_key.filter(|k| !k.trim().is_empty()) {
+        Some(key) => key,
+        None => secure_store_get("SIXTYDB_API_KEY")?.ok_or("Enter your 60db API key.")?,
+    };
+    if key.len() > 4096 || key.chars().any(char::is_whitespace) {
+        return Err("Enter a valid 60db API key.".into());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|_| "Could not connect to 60db.")?;
+    let response = client
+        .get("https://api.60db.ai/voices")
+        .bearer_auth(&key)
+        .send()
+        .await
+        .map_err(|_| "Could not connect to 60db.")?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Could not load 60db voices (HTTP {}). Check your API key.",
+            response.status()
+        ));
+    }
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| "Invalid 60db voice catalog.")?;
+    let voices = body
+        .get("data")
+        .and_then(|v| v.as_array())
+        .ok_or("Invalid 60db voice catalog.")?;
+    Ok(serde_json::json!({"voices": voices}))
+}
+
+#[tauri::command]
+async fn sixtydb_status() -> Result<serde_json::Value, String> {
+    let path = std::path::PathBuf::from(home_dir()).join(".openjarvis/config.toml");
+    let content = std::fs::read_to_string(path).unwrap_or_default();
+    let doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|_| "Invalid Jarvis configuration.")?;
+    let voice_id = doc
+        .get("speech")
+        .and_then(|s| s.get("voice_id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let cfg = read_inference_config();
+    Ok(serde_json::json!({
+        "key_configured": secure_store_get("SIXTYDB_API_KEY")?.is_some()
+            && cfg.engine.as_deref() == Some("sixtydb"),
+        "voice_id": voice_id, "voice_speed": 1.0, "model": "60db-tiny"
+    }))
+}
+
+#[tauri::command]
+async fn configure_sixtydb(
+    api_key: Option<String>,
+    voice_id: String,
+    backend: tauri::State<'_, SharedBackend>,
+    status: tauri::State<'_, SharedStatus>,
+) -> Result<(), String> {
+    let catalog = sixtydb_voices(api_key.clone()).await?;
+    let valid = catalog["voices"]
+        .as_array()
+        .ok_or("Invalid voice catalog.")?
+        .iter()
+        .any(|v| v["voice_id"].as_str() == Some(voice_id.as_str()));
+    if !valid {
+        return Err("Choose a voice from your 60db voice catalog.".into());
+    }
+    let path = std::path::PathBuf::from(home_dir()).join(".openjarvis/config.toml");
+    let original = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut doc = original
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|_| "Invalid Jarvis configuration.")?;
+    doc["engine"]["default"] = toml_edit::value("sixtydb");
+    doc["intelligence"]["default_model"] = toml_edit::value("60db-tiny");
+    doc["intelligence"]["preferred_engine"] = toml_edit::value("sixtydb");
+    doc["intelligence"]["provider"] = toml_edit::value("sixtydb");
+    doc["intelligence"]["fallback_model"] = toml_edit::value("");
+    for field in ["model_chat", "model_short", "model_long", "model_code"] {
+        doc["intelligence"][field] = toml_edit::value("60db-tiny");
+    }
+    doc["server"]["model"] = toml_edit::value("60db-tiny");
+    doc["deep_research"]["engine"] = toml_edit::value("sixtydb");
+    doc["deep_research"]["model"] = toml_edit::value("60db-tiny");
+    doc["spec_search"]["teacher_engine"] = toml_edit::value("sixtydb");
+    doc["spec_search"]["teacher_model"] = toml_edit::value("60db-tiny");
+    doc["optimize"]["optimizer_provider"] = toml_edit::value("sixtydb");
+    doc["optimize"]["optimizer_model"] = toml_edit::value("60db-tiny");
+    doc["optimize"]["judge_model"] = toml_edit::value("60db-tiny");
+    doc["speech"]["backend"] = toml_edit::value("sixtydb");
+    doc["speech"]["tts_backend"] = toml_edit::value("sixtydb");
+    doc["speech"]["voice_id"] = toml_edit::value(&voice_id);
+    doc["digest"]["tts_backend"] = toml_edit::value("sixtydb");
+    doc["digest"]["voice_id"] = toml_edit::value(&voice_id);
+    if read_inference_config().engine.as_deref() != Some("sixtydb") {
+        backend.lock().await.stop_all().await;
+        *status.lock().await = SetupStatus::default();
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, doc.to_string()).map_err(|e| e.to_string())?;
+    if let Err(error) = set_inference_source(
+        "custom".into(),
+        Some("60db-tiny".into()),
+        Some("https://api.60db.ai".into()),
+        Some("sixtydb".into()),
+        api_key,
+        Some(false),
+    )
+    .await
+    {
+        std::fs::write(&path, original).map_err(|e| e.to_string())?;
+        return Err(error);
+    }
+    let key = secure_store_get("SIXTYDB_API_KEY")?.ok_or("Missing 60db API key.")?;
+    reload_cloud_keys_for_owned_backend(
+        backend.inner(),
+        status.inner(),
+        vec![("SIXTYDB_API_KEY".into(), key)],
+    )
+    .await;
     Ok(())
 }
 
@@ -2812,9 +2938,10 @@ fn read_configured_inference_config() -> Option<InferenceConfig> {
     std::fs::read_to_string(inference_config_path())
         .ok()
         .and_then(|text| parse_configured_inference_config(&text))
+        .filter(|cfg| cfg.kind == SourceKind::Custom && cfg.engine.as_deref() == Some("sixtydb"))
 }
 
-/// Read the on-disk inference config, or the Ollama default if absent.
+/// Legacy providers wait for 60db setup instead of launching local models.
 fn read_inference_config() -> InferenceConfig {
     read_configured_inference_config().unwrap_or_default()
 }
@@ -2955,15 +3082,8 @@ mod native_overlay {
             if value.is_empty() {
                 continue;
             }
-            match name.as_str() {
-                "OPENAI_API_KEY" => models.extend(["gpt-4o", "gpt-4o-mini"]),
-                "ANTHROPIC_API_KEY" => {
-                    models.extend(["claude-sonnet-4-20250514", "claude-haiku-4-20250414"])
-                }
-                "GEMINI_API_KEY" | "GOOGLE_API_KEY" => {
-                    models.extend(["gemini-2.5-flash", "gemini-2.5-pro"])
-                }
-                _ => {}
+            if name == "SIXTYDB_API_KEY" {
+                models.push("60db-tiny");
             }
         }
         serde_json::to_string(&models).unwrap_or_else(|_| "[]".into())
@@ -3421,6 +3541,9 @@ pub fn run() {
             pull_ollama_model,
             delete_ollama_model,
             save_cloud_key,
+            sixtydb_voices,
+            sixtydb_status,
+            configure_sixtydb,
             get_cloud_key_status,
             get_inference_source,
             set_inference_source,

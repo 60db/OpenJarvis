@@ -304,10 +304,7 @@ def _make_lightweight_system(
         if resolved is not None:
             plain_engine = resolved[1]
         else:
-            from openjarvis.engine.ollama import OllamaEngine
-
-            host = cfg.engine.ollama.host if cfg else ""
-            plain_engine = OllamaEngine(host=host) if host else OllamaEngine()
+            return _LightweightSystem(engine, model, cfg, runtime)
 
         # Wrap with InstrumentedEngine so agent ticks are recorded
         # in telemetry (FLOPs, energy, cost savings).

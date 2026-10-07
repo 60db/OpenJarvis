@@ -159,6 +159,13 @@ def _ensure_identity_prompt(messages: list[Message], app_config) -> list[Message
 async def chat_completions(request_body: ChatCompletionRequest, request: Request):
     """Handle chat completion requests (streaming and non-streaming)."""
     engine = request.app.state.engine
+    if getattr(request.app.state, "engine_name", "") == "sixtydb":
+        from openjarvis import sixtydb
+
+        if not sixtydb.api_key():
+            raise HTTPException(503, "Add your 60db API key in Settings first.")
+        if request_body.model != sixtydb.CHAT_MODEL:
+            raise HTTPException(400, "This Jarvis uses the 60db-tiny model.")
     agent = getattr(request.app.state, "agent", None)
     model = request_body.model
     use_server_agent = (
@@ -1252,6 +1259,12 @@ async def reload_cloud_engine(request: Request):
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
                     os.environ[k.strip()] = v.strip()
+
+    if getattr(request.app.state, "engine_name", "") == "sixtydb":
+        from openjarvis.server.sixtydb_routes import refresh_runtime
+
+        refresh_runtime(request.app)
+        return {"status": "ok", "message": "60db credentials reloaded"}
 
     # Try to build a fresh CloudEngine.
     try:

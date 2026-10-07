@@ -12,6 +12,7 @@ import webbrowser
 from pathlib import Path
 
 import click
+import httpx
 from rich.console import Console
 
 
@@ -76,6 +77,36 @@ def _ensure_frontend_dependencies(frontend: Path, npm: str) -> None:
         )
 
 
+def _running_sixtydb_port() -> int | None:
+    """Reuse the recorded daemon when it already runs the 60db stack."""
+    from openjarvis.cli.daemon_cmd import _bound_address, _read_pid
+
+    pid = _read_pid()
+    if pid is None:
+        return None
+    host, port = _bound_address(pid)
+    if host not in {"127.0.0.1", "localhost", "0.0.0.0", "::", "::1"}:
+        raise click.ClickException(
+            "The running server must bind to loopback for graphical mode."
+        )
+    key = os.environ.get("OPENJARVIS_API_KEY", "")
+    try:
+        response = httpx.get(
+            f"http://127.0.0.1:{port}/v1/info",
+            headers={"Authorization": f"Bearer {key}"} if key else {},
+            timeout=5,
+        )
+        response.raise_for_status()
+        if response.json().get("engine") == "sixtydb":
+            return port
+    except (httpx.HTTPError, ValueError):
+        pass
+    raise click.ClickException(
+        "Stop the existing server with `jarvis stop`, "
+        "then reopen `jarvis gui` to use 60db."
+    )
+
+
 @click.command()
 @click.option(
     "--frontend-port", default=5173, show_default=True, type=click.IntRange(1, 65535)
@@ -107,11 +138,14 @@ def gui(frontend_port: int, api_port: int, no_server: bool, no_browser: bool) ->
     _check_frontend_port(frontend_port)
     _ensure_frontend_dependencies(frontend, npm)
 
-    if not no_server:
+    running_port = _running_sixtydb_port() if not no_server else None
+    if running_port is not None:
+        api_port = running_port
+    elif not no_server:
         uv = shutil.which("uv")
         if uv is None:
             raise click.ClickException(
-                "uv is required to start the API with desktop dependencies. "
+                "uv is required to start the API with server dependencies. "
                 "Install uv or use --no-server with an already-running API."
             )
         server = subprocess.run(
@@ -119,9 +153,13 @@ def gui(frontend_port: int, api_port: int, no_server: bool, no_browser: bool) ->
                 uv,
                 "run",
                 "--extra",
-                "desktop",
+                "server",
                 "jarvis",
                 "start",
+                "--engine",
+                "sixtydb",
+                "--model",
+                "60db-tiny",
                 "--port",
                 str(api_port),
             ],

@@ -54,7 +54,7 @@ def optimize_group() -> None:
 @click.option(
     "--optimizer-model",
     type=str,
-    default="claude-sonnet-4-6",
+    default="60db-tiny",
     help="Model used by the LLM optimizer.",
 )
 @click.option(

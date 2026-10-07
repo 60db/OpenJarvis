@@ -103,6 +103,32 @@ class ChecklistScorer:
         if not checklist:
             return 1.0, []
 
+        if self._judge_model == "60db-tiny":
+            from openjarvis.sixtydb import evaluate
+
+            details = []
+            # Judge accepts at most 32 independent questions in one request.
+            for start in range(0, len(checklist), 32):
+                batch = checklist[start : start + 32]
+                result = evaluate(
+                    {"task": context, "answer": model_answer},
+                    {
+                        str(i): {"type": "noul", "instructions": item}
+                        for i, item in enumerate(batch)
+                    },
+                )
+                for i, item in enumerate(batch):
+                    probability = float(result["answers"][str(i)]["noul"])
+                    details.append(
+                        {
+                            "item": item,
+                            "passed": probability >= 0.5,
+                            "probability": probability,
+                            "reasoning": "60db Judge probability of meeting criterion",
+                        }
+                    )
+            return sum(d["passed"] for d in details) / len(details), details
+
         checklist_text = "\n".join(
             f"{i + 1}. {item}" for i, item in enumerate(checklist)
         )

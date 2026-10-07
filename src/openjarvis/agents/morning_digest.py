@@ -54,7 +54,7 @@ class MorningDigestAgent(ToolUsingAgent):
         self._timezone = kwargs.pop("timezone", "America/Los_Angeles")
         self._voice_id = kwargs.pop("voice_id", "")
         self._voice_speed = kwargs.pop("voice_speed", 1.0)
-        self._tts_backend = kwargs.pop("tts_backend", "cartesia")
+        self._tts_backend = kwargs.pop("tts_backend", "sixtydb")
         self._digest_store_path = kwargs.pop("digest_store_path", "")
         self._honorific = kwargs.pop("honorific", "sir")
         super().__init__(*args, **kwargs)

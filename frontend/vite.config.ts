@@ -27,7 +27,7 @@ export default defineConfig({
       manifest: {
         name: 'OpenJarvis',
         short_name: 'Jarvis',
-        description: 'On-device AI assistant',
+        description: 'Daily AI assistant powered by 60db',
         theme_color: '#161618',
         background_color: '#161618',
         display: 'standalone',
@@ -38,7 +38,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        navigateFallbackDenylist: [/^\/v1\//, /^\/health/, /^\/dashboard/, /^\/api\//],
+        navigateFallbackDenylist: [/^\/v1\//, /^\/health/, /^\/api\//],
       },
     }),
   ],

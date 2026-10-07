@@ -1,8 +1,7 @@
-"""Audio transcription tool — transcribe audio via OpenAI Whisper."""
+"""Audio transcription tool — transcribe audio via 60db."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -11,12 +10,12 @@ from openjarvis.core.types import ToolResult
 from openjarvis.tools._stubs import BaseTool, ToolSpec
 
 _SUPPORTED_FORMATS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"}
-_MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB
+_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 60db upload limit
 
 
 @ToolRegistry.register("audio_transcribe")
 class AudioTranscribeTool(BaseTool):
-    """Transcribe audio files using OpenAI Whisper or a local provider."""
+    """Transcribe audio files using 60db Garuda."""
 
     tool_id = "audio_transcribe"
     is_local = False
@@ -42,10 +41,7 @@ class AudioTranscribeTool(BaseTool):
                     },
                     "provider": {
                         "type": "string",
-                        "description": (
-                            "Transcription provider: 'openai' or 'local'."
-                            " Default 'openai'."
-                        ),
+                        "description": ("Transcription uses 60db Garuda."),
                     },
                 },
                 "required": ["file_path"],
@@ -99,75 +95,30 @@ class AudioTranscribeTool(BaseTool):
                 tool_name="audio_transcribe",
                 content=(
                     f"File too large: {file_size} bytes"
-                    f" (max {_MAX_FILE_SIZE_BYTES} bytes / 25 MB)."
+                    f" (max {_MAX_FILE_SIZE_BYTES} bytes / 10 MB)."
                 ),
                 success=False,
             )
 
-        provider = params.get("provider", "openai")
         language = params.get("language")
-
-        if provider == "local":
-            return ToolResult(
-                tool_name="audio_transcribe",
-                content="Local transcription provider is not yet implemented.",
-                success=False,
-            )
-
-        if provider != "openai":
-            return ToolResult(
-                tool_name="audio_transcribe",
-                content=(
-                    f"Unsupported provider '{provider}'. Supported: 'openai', 'local'."
-                ),
-                success=False,
-            )
-
-        # OpenAI Whisper provider
         try:
-            import openai
-        except ImportError:
-            return ToolResult(
-                tool_name="audio_transcribe",
-                content=(
-                    "openai package not installed. Install with: pip install openai"
-                ),
-                success=False,
+            from openjarvis.speech.sixtydb import SixtyDBSpeechBackend
+
+            result = SixtyDBSpeechBackend().transcribe(
+                path.read_bytes(),
+                format=suffix.lstrip("."),
+                language=language,
             )
-
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
             return ToolResult(
                 tool_name="audio_transcribe",
-                content="No API key configured. Set OPENAI_API_KEY.",
-                success=False,
-            )
-
-        try:
-            client = openai.OpenAI()
-            kwargs: dict[str, Any] = {"model": "whisper-1"}
-            if language:
-                kwargs["language"] = language
-
-            with open(file_path, "rb") as f:
-                kwargs["file"] = f
-                transcription = client.audio.transcriptions.create(**kwargs)
-
-            text = transcription.text
-            metadata: dict[str, Any] = {
-                "file_path": str(path.resolve()),
-                "provider": provider,
-            }
-            if language:
-                metadata["language"] = language
-            if hasattr(transcription, "duration"):
-                metadata["duration_ms"] = int(transcription.duration * 1000)
-
-            return ToolResult(
-                tool_name="audio_transcribe",
-                content=text,
+                content=result.text,
                 success=True,
-                metadata=metadata,
+                metadata={
+                    "file_path": str(path.resolve()),
+                    "provider": "sixtydb",
+                    "language": result.language,
+                    "duration_ms": int(result.duration_seconds * 1000),
+                },
             )
         except Exception as exc:
             return ToolResult(

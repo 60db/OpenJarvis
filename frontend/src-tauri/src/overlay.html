@@ -160,7 +160,7 @@ html,body,:root{
 const input=document.getElementById('input');
 const sendBtn=document.getElementById('send-btn');
 const messagesEl=document.getElementById('messages');
-let streaming=false,abort=null,model='qwen3.5:4b';
+let streaming=false,abort=null,model='60db-tiny';
 let convId='', convTitle='Overlay chat', convCreated=Date.now();
 let messages=[];
 
@@ -178,33 +178,12 @@ try{
 if(!convId) convId=genId();
 if(messages.length) renderAll();
 
-// Build model dropdown: local (installed) + cloud (keyed)
+// 60db is the only inference provider.
 const modelSelect=document.getElementById('model-select');
-let cloudModels=[];
-try{
-  const cd=document.getElementById('cloud-data').textContent.trim();
-  if(cd&&cd!=='__CLOUD_PLACEHOLDER__') cloudModels=JSON.parse(cd);
-}catch{}
-
-fetch('/v1/models').then(r=>r.json()).then(d=>{
-  const local=(Array.isArray(d)?d:(d.data||d.models||[])).map(m=>m.id||m.name).filter(Boolean);
-  while(modelSelect.firstChild) modelSelect.removeChild(modelSelect.firstChild);
-  if(local.length){
-    const g=document.createElement('optgroup');g.label='Local';
-    local.forEach(id=>{const o=document.createElement('option');o.value=id;o.textContent=id;g.appendChild(o)});
-    modelSelect.appendChild(g);
-  }
-  if(cloudModels.length){
-    const g=document.createElement('optgroup');g.label='Cloud';
-    cloudModels.forEach(id=>{const o=document.createElement('option');o.value=id;o.textContent=id;g.appendChild(o)});
-    modelSelect.appendChild(g);
-  }
-  // Restore saved model or pick first available
-  const saved=messages.length&&messages[0].model;
-  if(saved&&modelSelect.querySelector('option[value="'+CSS.escape(saved)+'"]')){modelSelect.value=saved}
-  model=modelSelect.value||model;
-}).catch(()=>{});
-modelSelect.addEventListener('change',()=>{model=modelSelect.value});
+modelSelect.replaceChildren();
+const modelOption=document.createElement('option');
+modelOption.value='60db-tiny';modelOption.textContent='60db-tiny';
+modelSelect.appendChild(modelOption);
 
 const SEND='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
 const STOP='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -301,7 +280,7 @@ function md(src){
 }
 const THINKING='<span class="thinking"><span></span><span></span><span></span></span>';
 const CARET='<span class="caret"></span>';
-const CLOUD_PFX=['gpt-','o1-','o3-','o4-','claude-','gemini-','openrouter/','chatgpt-'];
+
 function save(){
   const conv={id:convId,title:convTitle,createdAt:convCreated,updatedAt:Date.now(),model,
     messages:messages.map((m,i)=>{
@@ -402,7 +381,7 @@ async function send(){
   }
   if(acc){
     const totalMs=Date.now()-t0;
-    const engine=CLOUD_PFX.some(p=>model.startsWith(p))?'cloud':'ollama';
+    const engine='sixtydb';
     const telem={engine,model_id:model,total_ms:totalMs,ttft_ms:ttft||undefined,
       tokens_per_sec:usage?.completion_tokens?usage.completion_tokens/(totalMs/1000):undefined,
       complexity_score:complexity?.score,complexity_tier:complexity?.tier,

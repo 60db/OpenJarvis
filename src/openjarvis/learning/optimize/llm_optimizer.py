@@ -38,7 +38,7 @@ class LLMOptimizer:
     def __init__(
         self,
         search_space: SearchSpace,
-        optimizer_model: str = "claude-sonnet-4-6",
+        optimizer_model: str = "60db-tiny",
         optimizer_backend: Optional[InferenceBackend] = None,
     ) -> None:
         self.search_space = search_space

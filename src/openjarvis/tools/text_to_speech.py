@@ -41,7 +41,7 @@ class TextToSpeechTool(BaseTool):
                     },
                     "backend": {
                         "type": "string",
-                        "description": "TTS backend (cartesia, kokoro, openai_tts).",
+                        "description": "TTS backend (sixtydb).",
                     },
                     "output_dir": {
                         "type": "string",
@@ -76,9 +76,7 @@ class TextToSpeechTool(BaseTool):
                     voice_id = getattr(speech, "voice_id", "") or ""
             except Exception:
                 pass
-        backend_key = backend_key or "cartesia"
-        _ALIASES = {"openai": "openai_tts"}
-        backend_key = _ALIASES.get(backend_key, backend_key)
+        backend_key = "sixtydb"
         output_dir = params.get("output_dir", "")
         # Read speed without a falsy default so "the caller did not set speed"
         # stays distinct from a real value. Note 0 is a legitimate value and
@@ -103,11 +101,7 @@ class TextToSpeechTool(BaseTool):
         backend_cls = TTSRegistry.get(backend_key)
         backend = backend_cls()
 
-        # Only forward parameters the caller (or config) actually set. Passing
-        # voice_id="" or speed=1.0 unconditionally overrides each backend's own
-        # default value: kokoro's synthesize() defaults voice_id to "af_heart",
-        # and an empty string overrides it so the local backend is asked for a
-        # voice named "" and 404s while paid backends happen to tolerate it.
+        # Let 60db use the saved voice when the caller omits it.
         synth_kwargs: dict[str, Any] = {}
         if voice_id:
             synth_kwargs["voice_id"] = voice_id

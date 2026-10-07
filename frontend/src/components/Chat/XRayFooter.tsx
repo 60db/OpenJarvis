@@ -22,8 +22,8 @@ export function XRayFooter({ usage, telemetry, isResearch = false }: Props) {
   if (isResearch) {
     parts.push('Deep Research');
   } else {
-    if (telemetry?.engine) parts.push(telemetry.engine);
-    if (telemetry?.model_id) parts.push(telemetry.model_id);
+    if (telemetry?.engine === 'sixtydb') parts.push('60db');
+    if (telemetry?.model_id === '60db-tiny') parts.push(telemetry.model_id);
   }
   if (telemetry?.complexity_tier) parts.push(telemetry.complexity_tier);
   if (telemetry?.total_ms) parts.push(formatMs(telemetry.total_ms));
@@ -41,14 +41,13 @@ export function XRayFooter({ usage, telemetry, isResearch = false }: Props) {
   const rows: Array<{ label: string; value: string; color?: string }> = [];
   if (isResearch) {
     rows.push({ label: 'Mode', value: 'Deep Research' });
-  } else if (telemetry?.engine) {
-    const modelDetail = telemetry.model_id || '';
-    rows.push({ label: 'Engine', value: `${telemetry.engine}${modelDetail ? ` (${modelDetail})` : ''}` });
+  } else if (telemetry?.engine === 'sixtydb') {
+    rows.push({ label: 'Provider', value: '60db' });
   }
   if (usage) {
     const tokenParts = [`${usage.completion_tokens} generated`, `${usage.prompt_tokens} prompt`];
     // Estimate thinking tokens: if total generated >> visible output, the
-    // difference is internal reasoning (e.g. Qwen3.5 thinking mode).
+    // difference is internal reasoning.
     if (telemetry?.tokens_per_sec && telemetry.total_ms && usage.completion_tokens > 50) {
       const visibleEstimate = Math.ceil(
         (telemetry.total_ms / 1000) * telemetry.tokens_per_sec,

@@ -55,14 +55,14 @@ describe('chat engine telemetry', () => {
     ).toBe('ollama');
   });
 
-  it('falls back to server info, then the legacy model heuristic', () => {
+  it('falls back to server info, then 60db', () => {
     expect(
       resolveChatEngine({
         serverEngine: 'nim',
         selectedModel: 'short',
       }),
     ).toBe('nim');
-    expect(resolveChatEngine({ selectedModel: 'gpt-5' })).toBe('cloud');
-    expect(resolveChatEngine({ selectedModel: 'qwen3:8b' })).toBe('ollama');
+    expect(resolveChatEngine({ selectedModel: '60db-tiny' })).toBe('sixtydb');
+    expect(resolveChatEngine({ selectedModel: 'old-model' })).toBe('sixtydb');
   });
 });

@@ -120,6 +120,56 @@ export const apiFetch = (
   return fetch(`${getBase()}${path}`, { ...init, headers });
 };
 
+export interface SixtyDBVoice {
+  voice_id: string;
+  name: string;
+  labels?: { language_name?: string; language?: string; accent?: string };
+  preview_url?: string;
+}
+
+export interface SixtyDBStatus {
+  key_configured: boolean;
+  voice_id: string;
+  voice_speed: number;
+  model: string;
+}
+
+async function sixtydbFetch<T>(path: string, body?: unknown): Promise<T> {
+  const response = await apiFetch(`/v1/sixtydb/${path}`, body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(typeof error.detail === 'string' ? error.detail : '60db request failed.');
+  }
+  return response.json();
+}
+
+export async function getSixtyDBStatus(): Promise<SixtyDBStatus> {
+  return isTauri() ? tauriInvoke('sixtydb_status') : sixtydbFetch('status');
+}
+
+export async function getSixtyDBVoices(apiKey = ''): Promise<SixtyDBVoice[]> {
+  const result = isTauri()
+    ? await tauriInvoke<{ voices: SixtyDBVoice[] }>('sixtydb_voices', { apiKey: apiKey || null })
+    : await sixtydbFetch<{ voices: SixtyDBVoice[] }>('voices', { api_key: apiKey });
+  return result.voices;
+}
+
+export async function configureSixtyDB(apiKey: string, voiceId: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke('configure_sixtydb', { apiKey: apiKey || null, voiceId });
+  } else {
+    await sixtydbFetch('configure', { api_key: apiKey, voice_id: voiceId });
+  }
+}
+
+export function judgeWithSixtyDB(state: unknown, questions: Record<string, unknown>) {
+  return sixtydbFetch<{ answers: Record<string, { score?: number; confidence?: number; noul?: number }> }>(
+    'judge', { state, questions },
+  );
+}
+
 async function tauriInvoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const { invoke } = await import('@tauri-apps/api/core');
   const apiUrl = getBase();
@@ -181,7 +231,7 @@ export async function fetchModels(): Promise<ModelInfo[]> {
   if (isTauri()) {
     try {
       const result = await tauriInvoke<{ data?: ModelInfo[] }>('fetch_models');
-      return result?.data || [];
+      return (result?.data || []).filter((m) => m.id === '60db-tiny');
     } catch {
       // Fall through to fetch
     }
@@ -189,78 +239,13 @@ export async function fetchModels(): Promise<ModelInfo[]> {
   const res = await apiFetch(`/v1/models`);
   if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
   const data = await res.json();
-  return data.data || [];
+  return (data.data || []).filter((m: ModelInfo) => m.id === '60db-tiny');
 }
 
 export async function fetchRecommendedModel(): Promise<{ model: string; reason: string }> {
   const res = await apiFetch(`/v1/recommended-model`);
   if (!res.ok) return { model: '', reason: 'Failed to fetch' };
   return res.json();
-}
-
-export async function pullModel(modelName: string): Promise<void> {
-  // In Tauri, go through the Rust backend directly (avoids CORS / timeout
-  // issues with long model downloads via fetch).
-  if (isTauri()) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('pull_ollama_model', { modelName });
-      return;
-    } catch (e: any) {
-      throw new Error(e?.message || e || 'Download failed');
-    }
-  }
-  const res = await apiFetch(`/v1/models/pull`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: modelName }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Failed to pull model: ${detail}`);
-  }
-}
-
-export async function deleteModel(modelName: string): Promise<void> {
-  if (isTauri()) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_ollama_model', { modelName });
-      return;
-    } catch (e: any) {
-      throw new Error(e?.message || e || 'Delete failed');
-    }
-  }
-  const res = await apiFetch(`/v1/models/${encodeURIComponent(modelName)}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Failed to delete model: ${detail}`);
-  }
-}
-
-const _CLOUD_PREFIXES = ['gpt-', 'o1-', 'o3-', 'o4-', 'claude-', 'gemini-', 'openrouter/'];
-
-export async function preloadModel(modelName: string, owner?: string): Promise<void> {
-  // Cloud models don't need Ollama preloading
-  if (owner === 'litellm' || _CLOUD_PREFIXES.some(p => modelName.startsWith(p))) {
-    return;
-  }
-  // Trigger Ollama to load the model into memory (empty prompt, no generation).
-  const ollamaUrl = 'http://127.0.0.1:11434';
-  try {
-    const res = await fetch(`${ollamaUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelName, prompt: '', keep_alive: '5m' }),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!res.ok) throw new Error(`Preload failed: ${res.status}`);
-  } catch (e: any) {
-    if (e.name === 'TimeoutError') throw new Error('Model load timed out (120s)');
-    throw e;
-  }
 }
 
 export async function fetchSavings(): Promise<SavingsData> {
@@ -362,7 +347,8 @@ export interface SpeechHealth {
   reason?: string;
 }
 
-export async function transcribeAudio(audioBlob: Blob, filename = 'recording.webm'): Promise<TranscriptionResult> {
+export async function transcribeAudio(audioBlob: Blob, filename?: string): Promise<TranscriptionResult> {
+  filename ||= `recording.${audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm'}`;
   if (isTauri()) {
     try {
       const buffer = await audioBlob.arrayBuffer();

@@ -17,10 +17,10 @@
 #        --tools "knowledge_search,knowledge_sql,memory_store,think"
 
 [engine]
-default = "ollama"
+default = "sixtydb"
 
 [intelligence]
-default_model = "qwen3.5:9b"
+default_model = "60db-tiny"
 temperature = 0.3
 
 [agent]

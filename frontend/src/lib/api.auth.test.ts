@@ -136,3 +136,12 @@ describe('tool credentials', () => {
     );
   });
 });
+
+it('filters old provider models from the customer model list', async () => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: [
+    { id: '60db-tiny', owned_by: 'sixtydb' },
+    { id: 'gpt-5', owned_by: 'old-provider' },
+  ] }), { status: 200 }));
+  const { fetchModels } = await freshApi();
+  await expect(fetchModels()).resolves.toEqual([{ id: '60db-tiny', owned_by: 'sixtydb' }]);
+});

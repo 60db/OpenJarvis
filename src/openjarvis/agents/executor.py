@@ -26,14 +26,8 @@ logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
 
-# Default model for monitor_operative / long-horizon agent ticks. qwen3:8b
-# emits tool_calls but, when given the full MonitorOperative system prompt
-# alongside a `think` no-op tool, reliably picks `think` instead of the real
-# action tools — producing tickless prose from training-data memory.
-# gemma4:31b follows the function-calling protocol with the same prompt and
-# actually invokes web_search / memory_retrieve. Explicit ``config["model"]``
-# on an agent still wins.
-_AGENT_TICK_DEFAULT_MODEL = "gemma4:31b"
+# Default model for managed agent ticks.
+_AGENT_TICK_DEFAULT_MODEL = "60db-tiny"
 
 
 def _should_retry_empty_result(result: AgentResult) -> bool:

@@ -7,11 +7,10 @@
 #   jarvis ask --agent orchestrator "Find and fix the bug in test_utils.py"
 
 [engine]
-default = "ollama"
+default = "sixtydb"
 
 [intelligence]
-default_model = "qwen3.5:9b"
-# default_model = "qwen3.5:35b"    # Better for complex code tasks
+default_model = "60db-tiny"
 
 [agent]
 default_agent = "orchestrator"      # Multi-turn with tool selection

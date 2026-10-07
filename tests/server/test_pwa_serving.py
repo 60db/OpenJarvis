@@ -73,6 +73,12 @@ def client_with_static(tmp_path, monkeypatch):
 
 
 class TestPWAServing:
+    @pytest.mark.parametrize("path", ["/dashboard", "/comparison"])
+    def test_dashboard_urls_serve_the_app(self, client_with_static, path):
+        resp = client_with_static.get(path)
+        assert resp.status_code == 200
+        assert resp.text == "<html><body>SPA</body></html>"
+
     def test_sw_js_served_as_file(self, client_with_static):
         """Service worker file should be served directly, not as index.html."""
         resp = client_with_static.get("/sw.js")

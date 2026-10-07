@@ -32,58 +32,47 @@
 >
 > **[Roadmap](https://open-jarvis.github.io/OpenJarvis/development/roadmap/)**
 
-## Why OpenJarvis?
+## Jarvis with 60db
 
-Personal AI agents are exploding in popularity, but nearly all of them still route intelligence through cloud APIs. Your "personal" AI continues to depend on someone else's server. At the same time, our [Intelligence Per Watt](https://www.intelligence-per-watt.ai/) research showed that local language models already handle 88.7% of single-turn chat and reasoning queries, with intelligence efficiency improving 5.3× from 2023 to 2025. The models and hardware are increasingly ready. What has been missing is the software stack to make local-first personal AI practical.
-
-OpenJarvis is that stack. It is a framework for local-first personal AI, built around three core ideas: shared primitives for building on-device agents; evaluations that treat energy, FLOPs, latency, and dollar cost as first-class constraints alongside accuracy; and a learning loop that improves models using local trace data. The goal is simple: make it possible to build personal AI agents that run locally by default, calling the cloud only when truly necessary. OpenJarvis aims to be both a research platform and a production foundation for local AI, in the spirit of PyTorch.
+This checkout uses one 60db API key for Vyas chat, speech recognition, speech
+synthesis, and Judge. Your conversations stay in Jarvis; chat requests disable
+60db chat-history storage. Audio and prompts are sent to 60db for processing.
 
 ## Installation
 
-Pick your platform and run one command. Each installer handles [uv](https://docs.astral.sh/uv/), the Python venv, Ollama, and a starter model — about 3 minutes on broadband.
+Install [uv](https://docs.astral.sh/uv/) and Node.js 22+ (with npm 11.19+), then
+run from this checkout:
 
-| Platform | One-liner |
-|---|---|
-| **macOS · Linux · WSL2** | `curl -fsSL https://open-jarvis.github.io/OpenJarvis/install.sh \| bash` |
-| **Native Windows** | `irm https://open-jarvis.github.io/OpenJarvis/install.ps1 \| iex` |
-| **Desktop GUI** | Download `.exe` / `.dmg` / `.deb` / `.rpm` / `.AppImage` from the [latest release](https://github.com/open-jarvis/OpenJarvis/releases) |
+```bash
+uv sync --extra server
+uv run --extra server jarvis gui
+```
 
-Then `jarvis` to start. The Rust extension and larger models continue downloading in the background; `jarvis doctor` shows status.
+Jarvis opens in your browser. Paste your 60db API key, click **Load voices**,
+choose a voice, and click **Start using Jarvis**. The same key powers chat,
+microphone input, spoken answers, and the **Judge answer** button. Change the
+key or voice later in **Settings → 60db**. No local model downloads are needed.
 
-Platform-specific notes (WSL2 setup, native-Windows scheduled-task service, desktop prerequisites, manual / contributor install): see the [installation docs](https://open-jarvis.github.io/OpenJarvis/getting-started/install/).
+The browser setup stores the key on this computer in an owner-only credentials
+file; the native desktop build stores it in the operating system keyring.
+The key is never saved in browser storage. Keep the local server on loopback,
+or configure server authentication before exposing it remotely.
+
+For the API contracts, see the [60db documentation](https://docs.60db.ai/introduction).
+The source desktop build (`cd frontend && npm run tauri dev`) has the same
+setup. Upstream release downloads do not include these changes.
 
 ## Quick Start
 
 ```bash
-jarvis                          # start chatting (default: chat-simple)
-jarvis gui                      # start the graphical browser interface
-jarvis init --preset <name> --force  # replace config with a starter preset
+uv run --extra server jarvis           # opens the key and voice setup
+uv run --extra server jarvis ask "Plan my day"  # after setup
 ```
 
-`jarvis gui` starts the local API server and frontend, then opens the graphical
-chat interface in your default browser. It requires Node.js 22+ and is
-available from a source checkout; packaged desktop installers are available
-from the [latest release](https://github.com/open-jarvis/OpenJarvis/releases).
-
-> Prefix `jarvis ...` with `uv run`, or `source .venv/bin/activate` first.
-
-| Preset | What it does |
-|---|---|
-| `morning-digest-mac` / `morning-digest-linux` / `morning-digest-minimal` | Spoken daily briefing from email, calendar, health, news |
-| `deep-research` | Multi-hop research across indexed docs with citations |
-| `code-assistant` | Agent with code execution, file I/O, and shell access |
-| `scheduled-monitor` | Stateful agent on a schedule with memory |
-| `chat-simple` | Lightweight conversation, no tools |
-
-Example:
-
-```bash
-jarvis init --preset morning-digest-mac --force
-jarvis connect gdrive          # one OAuth covers Gmail / Calendar / Tasks
-jarvis digest --fresh          # generate and play your first briefing
-```
-
-Per-preset deep dives: [morning digest](https://open-jarvis.github.io/OpenJarvis/user-guide/morning-digest/) · [deep research](https://open-jarvis.github.io/OpenJarvis/user-guide/deep-research/) · [code assistant](https://open-jarvis.github.io/OpenJarvis/user-guide/code-assistant/) · [scheduled monitor](https://open-jarvis.github.io/OpenJarvis/user-guide/scheduled-monitor/) · [chat simple](https://open-jarvis.github.io/OpenJarvis/user-guide/chat-simple/) · or the full [quickstart guide](https://open-jarvis.github.io/OpenJarvis/getting-started/quickstart/).
+The browser's microphone control transcribes through 60db. Enable voice output
+to hear replies in your selected voice. **Judge answer** evaluates a reply
+against the preceding question and displays its quality score; it runs only
+when clicked. All four services use your 60db workspace balance.
 
 ### Skills
 

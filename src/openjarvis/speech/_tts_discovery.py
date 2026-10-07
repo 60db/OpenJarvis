@@ -15,17 +15,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Priority order: local first, then cloud.
-TTS_BACKEND_ORDER = ("kokoro", "openai_tts", "cartesia")
-
-# Voice IDs are backend-specific and NOT portable. ``speech.voice_id`` applies
-# only to ``speech.tts_backend``; if synthesis falls back to another backend we
-# use that backend's own default rather than passing an unrecognized ID through.
-BACKEND_DEFAULT_VOICE = {
-    "kokoro": "bm_george",  # British male
-    "openai_tts": "onyx",  # deepest OpenAI preset
-    "cartesia": "",  # no safe static default; let Cartesia choose
-}
+TTS_BACKEND_ORDER = ("sixtydb",)
+BACKEND_DEFAULT_VOICE = {"sixtydb": ""}
 
 
 def default_voice_for(backend_id: str) -> str:
@@ -50,7 +41,7 @@ def get_tts_backend(
 
     seen = attempted if attempted is not None else set()
 
-    for key in dict.fromkeys((preferred, *TTS_BACKEND_ORDER)):
+    for key in TTS_BACKEND_ORDER:
         if not key or key in seen:
             continue
         seen.add(key)
@@ -70,7 +61,7 @@ def voice_preferences(config: "JarvisConfig") -> tuple[str, str, float]:
     """Resolve ``(tts_backend, voice_id, speed)`` from *config*."""
     speech = getattr(config, "speech", None)
     return (
-        getattr(speech, "tts_backend", "kokoro") or "kokoro",
+        getattr(speech, "tts_backend", "sixtydb") or "sixtydb",
         getattr(speech, "voice_id", "") or "",
         float(getattr(speech, "voice_speed", 1.0)),
     )

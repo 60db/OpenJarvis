@@ -1,18 +1,19 @@
+import { SixtyDBSetup } from './SixtyDBSetup';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, CheckCircle2, XCircle, Cpu, Server, Database } from 'lucide-react';
 import {
   getSetupStatus,
   fetchModels,
   fetchRecommendedModel,
-  resetInferenceSource,
+  resetInferenceSource, startBackend,
   type SetupStatus,
 } from '../lib/api';
 import { useAppStore } from '../lib/store';
 import { isEmbedOnlyModel } from '../lib/model-capabilities';
-import { InferenceRecoveryButton, InferenceSourceSetup } from './InferenceSourceSetup';
+import { InferenceRecoveryButton } from './InferenceSourceSetup';
 
 const STEPS = [
-  { key: 'ollama_ready', label: 'Inference Engine', icon: Cpu, detail: 'Starting Ollama...' },
+  { key: 'ollama_ready', label: '60db', icon: Cpu, detail: 'Connecting to 60db...' },
   { key: 'model_ready', label: 'AI Model', icon: Database, detail: 'Loading model...' },
   { key: 'server_ready', label: 'API Server', icon: Server, detail: 'Starting server...' },
 ] as const;
@@ -92,7 +93,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
       handedOffRef.current = true;
       // Pre-select a model BEFORE handing off so the chat is usable on
       // first send. Without this, the main app's post-mount fetch can
-      // lose a race to a fast first message and Ollama 400s.
+      // lose a race to a fast first message.
       try {
         const [models, rec] = await Promise.all([
           fetchModels().catch(() => []),
@@ -133,6 +134,13 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
     }
   }, [poll]);
 
+  const beginSixtyDB = useCallback(() => {
+    void startBackend().then(() => {
+      setSetupInitiated(true);
+      void poll();
+    }).catch((error) => setRecoveryError(String(error)));
+  }, [poll]);
+
   useEffect(() => {
     poll();
     const interval = setInterval(poll, 800);
@@ -141,11 +149,8 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
 
   if (statusChecked && status?.requires_source && !setupInitiated) {
     return (
-      <InferenceSourceSetup
-        onStarted={() => {
-          setSetupInitiated(true);
-          void poll();
-        }}
+      <SixtyDBSetup
+        onReady={beginSixtyDB}
       />
     );
   }
@@ -179,9 +184,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {!statusChecked
               ? 'Checking your saved setup...'
-              : status?.source === 'custom'
-                ? 'Connecting to your AI server...'
-                : 'Setting up your local AI...'}
+              : 'Connecting Jarvis to 60db...'}
           </p>
         </div>
 
@@ -189,7 +192,7 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
         <div className="flex flex-col gap-2 mb-8">
           {(status?.source === 'custom'
             ? [
-                { key: 'ollama_ready' as const, label: 'Inference Engine', icon: Cpu, detail: 'Connecting to your server...' },
+                { key: 'ollama_ready' as const, label: '60db', icon: Cpu, detail: 'Connecting to 60db...' },
                 { key: 'model_ready' as const, label: 'Endpoint', icon: Database, detail: 'Checking endpoint...' },
                 { key: 'server_ready' as const, label: 'API Server', icon: Server, detail: 'Starting server...' },
               ]

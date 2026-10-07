@@ -9,17 +9,16 @@ import threading
 import time
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from openjarvis.server.analytics_routes import router as analytics_router
 from openjarvis.server.api_routes import include_all_routes
-from openjarvis.server.comparison import comparison_router
 from openjarvis.server.connectors_router import create_connectors_router
-from openjarvis.server.dashboard import dashboard_router
 from openjarvis.server.digest_routes import create_digest_router
 from openjarvis.server.research_router import router as research_router
 from openjarvis.server.routes import router
+from openjarvis.server.sixtydb_routes import router as sixtydb_router
 from openjarvis.server.upload_router import router as upload_router
 
 logger = logging.getLogger(__name__)
@@ -492,8 +491,7 @@ def create_app(
                     pass
 
     app.include_router(router)
-    app.include_router(dashboard_router)
-    app.include_router(comparison_router)
+    app.include_router(sixtydb_router)
     app.include_router(create_connectors_router())
     app.include_router(create_digest_router())
     app.include_router(upload_router)
@@ -552,6 +550,10 @@ def create_app(
             app.include_router(webhook_router)
         except Exception as exc:
             logger.debug("Webhook routes init skipped: %s", exc)
+
+    @app.get("/comparison", include_in_schema=False)
+    async def legacy_comparison():
+        return RedirectResponse("/dashboard")
 
     # Serve static frontend assets if the static/ directory exists
     static_dir = pathlib.Path(__file__).parent / "static"

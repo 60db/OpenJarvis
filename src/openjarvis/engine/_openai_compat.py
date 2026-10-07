@@ -76,6 +76,9 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
 
     # -- InferenceEngine interface ------------------------------------------
 
+    def _prepare_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return payload
+
     def _resolve_model_id(self, model: str) -> str:
         return resolve_model_id_for_engine(model, self.engine_id)
 
@@ -99,6 +102,7 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
         # Default to tool_choice=auto when tools are provided
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        payload = self._prepare_payload(payload)
         try:
             url = f"{self._api_prefix}/chat/completions"
             resp = self._client.post(url, json=payload)
@@ -191,6 +195,7 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
         # Default to tool_choice=auto when tools are provided
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        payload = self._prepare_payload(payload)
         url = f"{self._api_prefix}/chat/completions"
         try:
             # ASYNC streaming: ``httpx.AsyncClient`` + ``aiter_lines`` never
@@ -220,7 +225,7 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
                         chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    delta = (chunk.get("choices") or [{}])[0].get("delta", {})
                     content = delta.get("content")
                     if content:
                         yield content
@@ -254,6 +259,7 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
         }
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        payload = self._prepare_payload(payload)
         url = f"{self._api_prefix}/chat/completions"
         try:
             # ASYNC streaming (see ``stream``): non-blocking shared client so
@@ -277,7 +283,7 @@ class _OpenAICompatibleEngine(AsyncHTTPEngineMixin, InferenceEngine):
                         chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
-                    choice = chunk.get("choices", [{}])[0]
+                    choice = (chunk.get("choices") or [{}])[0]
                     delta = choice.get("delta", {})
                     finish = choice.get("finish_reason")
                     content = delta.get("content")

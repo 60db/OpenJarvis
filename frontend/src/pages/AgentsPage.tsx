@@ -1395,23 +1395,20 @@ function AgentConfigGrid({ agent, onAgentUpdated }: { agent: ManagedAgent; onAge
   const [editingModel, setEditingModel] = useState(false);
   const [changingModel, setChangingModel] = useState(false);
   const [models, setModels] = useState<string[]>([]);
-  const currentModel = (agent.config?.model as string) || '(default)';
+  const currentModel = (agent.config?.model as string) || '60db-tiny';
+  const modelLabel = currentModel === '60db-tiny' ? '60db-tiny' : '60db setup required';
 
   // Model availability status: 'available' | 'unavailable' | 'unknown'
   const [modelAvailable, setModelAvailable] = useState<'available' | 'unavailable' | 'unknown'>('unknown');
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     async function checkModel() {
       try {
-        // Ask the backend which models are installed rather than hitting
-        // Ollama directly from the browser: the backend always knows where
-        // Ollama lives (incl. remote) and there's no cross-origin/CORS issue,
-        // which is what made the check spuriously report "Not available".
         const installed = (await fetchModels()).map((m) => m.id);
         if (cancelled) return;
-        setOllamaModels(installed);
+        setAvailableModels(installed);
         if (currentModel === '(default)') {
           setModelAvailable(installed.length > 0 ? 'available' : 'unknown');
         } else {
@@ -1433,13 +1430,13 @@ function AgentConfigGrid({ agent, onAgentUpdated }: { agent: ManagedAgent; onAge
       const fetched = (await fetchModels()).map((m) => m.id);
       setModels(fetched);
       // Same backend list drives both the dropdown and the availability dots.
-      setOllamaModels(fetched);
+      setAvailableModels(fetched);
     } catch { /* ignore */ }
     setEditingModel(true);
   }
 
   function isModelInstalled(modelId: string): boolean {
-    return ollamaModels.some(
+    return availableModels.some(
       (n) => n === modelId || n.startsWith(modelId + ':') || modelId.startsWith(n.split(':')[0])
     );
   }
@@ -1502,7 +1499,7 @@ function AgentConfigGrid({ agent, onAgentUpdated }: { agent: ManagedAgent; onAge
                 : 'Could not check model status'
           }
         />
-        <span style={{ color: 'var(--color-text)' }}>{currentModel}</span>
+        <span style={{ color: 'var(--color-text)' }}>{modelLabel}</span>
         {modelAvailable === 'unavailable' && (
           <span className="text-xs" style={{ color: 'var(--color-error)' }}>Not available</span>
         )}
@@ -3731,30 +3728,17 @@ export function AgentsPage() {
               </div>
             )}
 
-            {/* Usage stats + savings — single compact row */}
+            {/* 60db usage */}
             {(() => {
               const inTok = selectedAgent.input_tokens ?? 0;
               const outTok = selectedAgent.output_tokens ?? 0;
-              const modelName = (selectedAgent.config?.model as string) || '';
-              const paramMatch = modelName.match(/:(\d+(?:\.\d+)?)b/i);
-              const paramsB = paramMatch ? parseFloat(paramMatch[1]) : 9;
-              const flops = 2 * paramsB * 1e9 * (inTok + outTok);
-              const providers = [
-                { label: 'GPT-5.6 Sol', inPer1M: 5.0, outPer1M: 30.0 },
-                { label: 'Claude Fable 5', inPer1M: 10.0, outPer1M: 50.0 },
-                { label: 'Gemini 3.1 Pro', inPer1M: 2.0, outPer1M: 12.0 },
-              ];
-              const energyWh = (inTok + outTok) / 1000 * 0.4;
-              const energyKj = energyWh * 3.6;
-              const fmtFlops = flops >= 1e15 ? `${(flops / 1e15).toFixed(1)} PFLOPs` : `${(flops / 1e12).toFixed(1)} TFLOPs`;
-              const hasSavings = inTok + outTok > 0;
               const sectionTitle = { fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 8 };
               return (
                 <div className="p-4 rounded-xl" style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}>
                   <div className="flex gap-0 flex-wrap items-stretch">
                     {/* Agent Statistics */}
                     <div className="pr-5">
-                      <p style={sectionTitle}>Agent Statistics</p>
+                      <p style={sectionTitle}>60db Agent Usage</p>
                       <div className="flex gap-5">
                         <div>
                           <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-text)' }}>{selectedAgent.total_runs ?? 0}</p>
@@ -3770,39 +3754,7 @@ export function AgentsPage() {
                         </div>
                       </div>
                     </div>
-                    {hasSavings && (<>
-                      <div style={{ width: 1, background: 'var(--color-border)' }} />
-                      {/* Local Utilization */}
-                      <div className="px-5">
-                        <p style={sectionTitle}>Local Utilization</p>
-                        <div className="flex gap-5">
-                          <div>
-                            <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>{fmtFlops}</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Compute</p>
-                          </div>
-                          <div>
-                            <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>{energyKj.toFixed(2)} kJ</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Energy</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ width: 1, background: 'var(--color-border)' }} />
-                      {/* Dollars Saved */}
-                      <div className="pl-5">
-                        <p style={sectionTitle}>Dollars Saved vs.</p>
-                        <div className="flex gap-5">
-                          {providers.map((p) => {
-                            const cost = (inTok / 1e6) * p.inPer1M + (outTok / 1e6) * p.outPer1M;
-                            return (
-                              <div key={p.label}>
-                                <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>${cost.toFixed(4)}</p>
-                                <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>{p.label}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </>)}
+
                   </div>
                 </div>);
             })()}

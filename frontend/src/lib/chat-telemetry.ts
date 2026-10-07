@@ -1,15 +1,3 @@
-const CLOUD_PREFIXES = [
-  'gpt-',
-  'o1-',
-  'o3-',
-  'o4-',
-  'claude-',
-  'gemini-',
-  'openrouter/',
-  'MiniMax-',
-  'chatgpt-',
-];
-
 export function engineFromCompletionChunk(data: unknown): string | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const telemetry = (data as { telemetry?: unknown }).telemetry;
@@ -22,8 +10,6 @@ export function engineFromCompletionChunk(data: unknown): string | undefined {
 export function resolveChatEngine({
   routedEngine,
   serverEngine,
-  selectedModel,
-  selectedOwner,
 }: {
   routedEngine?: string;
   serverEngine?: string;
@@ -34,8 +20,5 @@ export function resolveChatEngine({
   // /v1/info describes only the server's configured wrapper (often "multi").
   if (routedEngine?.trim()) return routedEngine.trim();
   if (serverEngine?.trim()) return serverEngine.trim();
-  if (selectedOwner === 'litellm') return 'litellm';
-  return CLOUD_PREFIXES.some((prefix) => selectedModel.startsWith(prefix))
-    ? 'cloud'
-    : 'ollama';
+  return 'sixtydb';
 }

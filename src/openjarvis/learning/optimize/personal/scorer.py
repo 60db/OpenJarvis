@@ -27,6 +27,27 @@ class PersonalBenchmarkScorer(LLMJudgeScorer):
         Returns ``(is_correct, metadata)`` where *is_correct* indicates whether
         the candidate answer is at least as good as the reference.
         """
+        if self._judge_model == "60db-tiny":
+            from openjarvis.sixtydb import evaluate
+
+            result = evaluate(
+                {
+                    "query": record.problem,
+                    "reference": record.reference,
+                    "candidate": model_answer,
+                },
+                {
+                    "adequate": {
+                        "type": "noul",
+                        "instructions": (
+                            "Is the candidate answer at least as correct "
+                            "and helpful as the reference?"
+                        ),
+                    }
+                },
+            )
+            probability = float(result["answers"]["adequate"]["noul"])
+            return probability >= 0.5, {"judge": result, "probability": probability}
         prompt = (
             "Compare these two answers to the query.\n\n"
             f"Query: {record.problem}\n\n"

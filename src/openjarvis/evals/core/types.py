@@ -80,8 +80,8 @@ class RunConfig:
     max_workers: int = 4
     temperature: float = 0.0
     max_tokens: int = 2048
-    judge_model: str = "gpt-5-mini-2025-08-07"
-    judge_engine: str = "cloud"
+    judge_model: str = "60db-tiny"
+    judge_engine: str = "sixtydb"
     engine_key: Optional[str] = None
     agent_name: Optional[str] = None
     tools: List[str] = field(default_factory=list)
@@ -225,7 +225,7 @@ class DefaultsConfig:
 class JudgeConfig:
     """Configuration for the LLM judge."""
 
-    model: str = "gpt-5-mini-2025-08-07"
+    model: str = "60db-tiny"
     engine: Optional[str] = None
     provider: Optional[str] = None
     temperature: float = 0.0

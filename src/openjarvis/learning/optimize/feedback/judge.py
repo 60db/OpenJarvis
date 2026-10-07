@@ -92,6 +92,31 @@ class TraceJudge:
             *feedback* is the judge's textual reasoning.
         """
         prompt = _format_trace(trace)
+        if self._model in {"sixtydb-judge", "60db-tiny"}:
+            import json
+
+            from openjarvis.sixtydb import evaluate
+
+            result = evaluate(
+                prompt,
+                {
+                    "quality": {
+                        "type": "score",
+                        "instructions": (
+                            "Rate how correctly and helpfully the assistant "
+                            "completed the query."
+                        ),
+                        "criteria": [
+                            "Wrong or unhelpful",
+                            "Partly useful",
+                            "Mostly correct",
+                            "Fully correct and helpful",
+                        ],
+                    }
+                },
+            )
+            score = float(result["answers"]["quality"]["score"]) / 3
+            return min(max(score, 0.0), 1.0), json.dumps(result["answers"]["quality"])
         response = self._backend.generate(
             prompt,
             model=self._model,

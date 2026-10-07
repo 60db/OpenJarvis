@@ -10,10 +10,10 @@
 #   jarvis ask --agent deep_research "What meetings did I have with Alice last month?"
 
 [engine]
-default = "ollama"
+default = "sixtydb"
 
 [intelligence]
-default_model = "qwen3.5:9b"
+default_model = "60db-tiny"
 temperature = 0.3               # Low temperature for factual research
 
 [agent]

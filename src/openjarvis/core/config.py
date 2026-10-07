@@ -264,25 +264,8 @@ def detect_hardware() -> HardwareInfo:
 
 
 def recommend_engine(hw: HardwareInfo) -> str:
-    """Suggest the best inference engine for the detected hardware."""
-    gpu = hw.gpu
-    if gpu is None:
-        return "llamacpp"
-    if gpu.vendor == "apple":
-        return "mlx"
-    if gpu.vendor == "nvidia":
-        # Datacenter cards (A100, H100, L40, etc.) → vllm; consumer → ollama
-        datacenter_keywords = ("A100", "H100", "H200", "L40", "A10", "A30")
-        if any(kw in gpu.name for kw in datacenter_keywords):
-            return "vllm"
-        return "ollama"
-    if gpu.vendor == "amd":
-        # Datacenter cards (MI300, MI325, MI350, MI355) → vllm; consumer → lemonade
-        amd_datacenter_keywords = ("MI300", "MI325", "MI350", "MI355")
-        if any(kw in gpu.name for kw in amd_datacenter_keywords):
-            return "vllm"
-        return "lemonade"
-    return "llamacpp"
+    """Use 60db without local model or hardware requirements."""
+    return "sixtydb"
 
 
 def _available_memory_gb(hw: HardwareInfo) -> float:
@@ -314,6 +297,9 @@ def recommend_model(hw: HardwareInfo, engine: str) -> str:
     For Lemonade, prefer the validated Qwen3.6 35B A3B GGUF default.
     For other local engines, use the generic Qwen3.5 tier mapping.
     """
+    if engine == "sixtydb":
+        return "60db-tiny"
+
     from openjarvis.intelligence.model_catalog import BUILTIN_MODELS
 
     available_gb = _available_memory_gb(hw)
@@ -477,7 +463,7 @@ class LemonadeEngineConfig:
 class EngineConfig:
     """Inference engine settings with nested per-engine configs."""
 
-    default: str = "ollama"
+    default: str = "sixtydb"
     ollama: OllamaEngineConfig = field(default_factory=OllamaEngineConfig)
     vllm: VLLMEngineConfig = field(default_factory=VLLMEngineConfig)
     sglang: SGLangEngineConfig = field(default_factory=SGLangEngineConfig)
@@ -606,7 +592,7 @@ class EngineConfig:
 class IntelligenceConfig:
     """The model — identity, paths, quantization, and generation defaults."""
 
-    default_model: str = ""
+    default_model: str = "60db-tiny"
     # Optional per-CLI preset (used when ``-m`` omitted or ``-m smart``).
     model_chat: str = ""
     model_short: str = ""
@@ -838,8 +824,8 @@ class SpecSearchLearningConfig:
     """
 
     enabled: bool = False
-    teacher_model: str = "claude-opus-4-6"
-    teacher_engine: str = "cloud"  # registry key for the cloud engine
+    teacher_model: str = "60db-tiny"
+    teacher_engine: str = "sixtydb"  # registry key for the cloud engine
     autonomy_mode: str = "tiered"  # auto | tiered | manual
 
     # Per-session bounds (one diagnose/plan/execute pass)
@@ -1614,7 +1600,7 @@ class OperatorsConfig:
 class SpeechConfig:
     """Speech-to-text settings."""
 
-    backend: str = "auto"  # "auto", "faster-whisper", "openai", "deepgram"
+    backend: str = "sixtydb"
     model: str = "base"  # Whisper model size: tiny, base, small, medium, large-v3
     language: str = ""  # Empty = auto-detect
     device: str = "auto"  # "auto", "cpu", "cuda"
@@ -1624,8 +1610,8 @@ class SpeechConfig:
     # back to a different backend that backend's own default voice is used.
     # Kokoro IDs: bm_george / bm_lewis (British male), bf_emma / bf_isabella
     # (British female), af_* / am_* (American).
-    tts_backend: str = "kokoro"  # "kokoro", "openai_tts", "cartesia"
-    voice_id: str = "bm_george"
+    tts_backend: str = "sixtydb"
+    voice_id: str = ""
     voice_speed: float = 1.0
 
 
@@ -1635,11 +1621,11 @@ class OptimizeConfig:
 
     max_trials: int = 20
     early_stop_patience: int = 5
-    optimizer_model: str = "claude-sonnet-4-6"
-    optimizer_provider: str = "anthropic"
+    optimizer_model: str = "60db-tiny"
+    optimizer_provider: str = "sixtydb"
     benchmark: str = ""
     max_samples: int = 50
-    judge_model: str = "gpt-5-mini-2025-08-07"
+    judge_model: str = "60db-tiny"
     db_path: str = field(default_factory=lambda: str(get_config_dir() / "optimize.db"))
 
 
@@ -1740,7 +1726,7 @@ class DigestConfig:
     honorific: str = "sir"
     voice_id: str = ""
     voice_speed: float = 1.0
-    tts_backend: str = "cartesia"
+    tts_backend: str = "sixtydb"
     messages: DigestSectionConfig = field(
         default_factory=lambda: DigestSectionConfig(
             sources=["gmail", "slack", "google_tasks"]
@@ -2060,7 +2046,7 @@ def load_config(path: Optional[Path] = None) -> JarvisConfig:
     _ensure_config_dir()
     hw = detect_hardware()
     cfg = JarvisConfig(hardware=hw)
-    cfg.engine.default = recommend_engine(hw)
+    cfg.engine.default = "sixtydb"
 
     if path is not None:
         config_path = Path(path).expanduser().resolve()
@@ -2158,7 +2144,9 @@ def generate_minimal_toml(
     if hw.gpu:
         mem_label = "unified memory" if hw.gpu.vendor == "apple" else "VRAM"
         gpu_comment = f"\n# GPU: {hw.gpu.name} ({hw.gpu.vram_gb} GB {mem_label})"
-    if host:
+    if engine == "sixtydb":
+        engine_host_section = ""
+    elif host:
         engine_host_section = f'\n[engine.{engine}]\nhost = "{host}"\n'
     else:
         engine_host_section = (
